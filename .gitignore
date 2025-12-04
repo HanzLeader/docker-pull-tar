@@ -1,3 +1,6 @@
 test.py
 .*
 !.gitignore
+dist/
+build/
+*.spec
