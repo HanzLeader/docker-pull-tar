@@ -1,10 +1,12 @@
+# 标准库
 import uuid
+
+# 第三方库
 from fastapi import APIRouter, HTTPException
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from models.schemas import Settings, MirrorSource
-from services.settings_store import SettingsStore
+
+# 本地模块
+from ..models.schemas import Settings, MirrorSource
+from ..services.settings_store import SettingsStore
 
 router = APIRouter(prefix="/api", tags=["settings"])
 store = SettingsStore()
@@ -40,11 +42,11 @@ async def update_mirror(mirror_id: str, mirror: MirrorSource) -> MirrorSource:
     return result
 
 @router.delete("/mirrors/{mirror_id}")
-async def delete_mirror(mirror_id: str) -> dict:
+async def delete_mirror(mirror_id: str) -> dict[str, bool]:
     """删除指定镜像源。"""
     return {"success": store.delete_mirror(mirror_id)}
 
 @router.post("/mirrors/{mirror_id}/default")
-async def set_default_mirror(mirror_id: str) -> dict:
+async def set_default_mirror(mirror_id: str) -> dict[str, bool]:
     """设置默认镜像源。"""
     return {"success": store.set_default_mirror(mirror_id)}

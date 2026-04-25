@@ -1,11 +1,11 @@
+# 标准库
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from models.schemas import ConfigData, MirrorSource, HistoryItem, Settings
+# 本地模块
+from ..models.schemas import ConfigData, MirrorSource, HistoryItem, Settings
 
 
 class SettingsStore:
