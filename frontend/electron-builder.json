@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/schema/conf.schema.json",
+  "appId": "com.docker-pull-tar",
+  "productName": "DockerPull",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "resources/icon.ico"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "installerIcon": "resources/icon.ico",
+    "uninstallerIcon": "resources/icon.ico"
+  },
+  "extraResources": [
+    {
+      "from": "../backend",
+      "to": "backend"
+    }
+  ]
+}
