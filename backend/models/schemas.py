@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -44,7 +44,7 @@ class DownloadProgress(BaseModel):
     downloadedBytes: int
     totalBytes: int
     speed: float
-    layers: List[dict]
+    layers: List[Dict[str, Any]]
 
 
 class HistoryItem(BaseModel):
@@ -64,8 +64,8 @@ class HistoryItem(BaseModel):
 class ConfigData(BaseModel):
     version: str = "1.0"
     settings: Settings = Settings()
-    mirrors: List[MirrorSource] = []
-    history: List[HistoryItem] = []
+    mirrors: List[MirrorSource] = Field(default_factory=list)
+    history: List[HistoryItem] = Field(default_factory=list)
 
 
 class LogMessage(BaseModel):
