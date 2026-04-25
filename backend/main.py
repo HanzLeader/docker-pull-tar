@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from routers import settings
+from routers import download
+from routers import history
 from services.log_websocket import log_manager
 
 app = FastAPI(
@@ -24,6 +26,8 @@ app.add_middleware(
 )
 
 app.include_router(settings.router)
+app.include_router(download.router)
+app.include_router(history.router)
 
 @app.get("/api/health")
 async def health_check():
