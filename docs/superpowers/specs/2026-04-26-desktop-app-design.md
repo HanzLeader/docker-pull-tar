@@ -27,9 +27,8 @@ docker-pull-tar/
 ├── frontend/                    # Vue3 前端
 │   ├── src/
 │   │   ├── views/              # 页面组件
-│   │   │   ├── Home.vue        # 主页（搜索下载）
+│   │   │   ├── Home.vue        # 主页（下载）
 │   │   │   ├── History.vue     # 下载历史
-│   │   │   ├── Favorites.vue   # 收藏镜像
 │   │   │   └── Settings.vue    # 设置页面
 │   │   ├── components/         # 公共组件
 │   │   │   ├── LogConsole.vue  # 控制台日志面板
@@ -76,7 +75,7 @@ docker-pull-tar/
 
 ## 核心功能模块
 
-### 1. 主页 - 搜索下载
+### 1. 主页 - 下载
 
 **界面布局：**
 
@@ -85,20 +84,22 @@ docker-pull-tar/
 │  🚀 Docker 镜像下载工具                    [设置] [历史] │
 ├─────────────────────────────────────────────────────┤
 │                                                     │
-│  镜像名称: [____________] [搜索] [直接下载]           │
+│  镜像包名: [nginx____________] [:tag 可选]            │
 │                                                     │
-│  镜像站:   [下拉选择 ▼]  默认: Docker Hub             │
+│  示例: nginx, nginx:latest, alpine:3.18             │
+│                                                     │
+│  镜像源:   [下拉选择 ▼]  当前: docker.1ms.run          │
+│            (设置页可添加自定义镜像源)                  │
 │                                                     │
 │  架构:     [下拉选择 ▼]  默认: amd64                  │
 │                                                     │
-│  输出目录: [____________] [选择文件夹]               │
-│                                                     │
-│  代理设置: [http://proxy:port] (可选)                │
+│  输出目录: [C:\Downloads________] [选择文件夹]        │
 │                                                     │
 ├─────────────────────────────────────────────────────┤
 │  📋 控制台日志                                       │
 │  ├───────────────────────────────────────────────┤ │
 │  │ [2026-04-26 10:00] 🚀 开始下载 nginx:latest    │ │
+│  │ [2026-04-26 10:00] 📦 镜像源: docker.1ms.run   │ │
 │  │ [2026-04-26 10:01] ⬇️ 正在下载 layer 1/5...   │ │
 │  │ [2026-04-26 10:02] ✅ 下载完成!                │ │
 │  │ [清空日志]                                     │ │
@@ -115,9 +116,16 @@ docker-pull-tar/
 └─────────────────────────────────────────────────────┘
 ```
 
+**镜像地址拼接规则：**
+
+用户输入包名后，系统自动拼接完整镜像地址：
+- 输入 `nginx` → `docker.1ms.run/library/nginx:latest`
+- 输入 `nginx:1.25` → `docker.1ms.run/library/nginx:1.25`
+- 输入 `bitnami/nginx` → `docker.1ms.run/bitnami/nginx:latest`
+
 **功能点：**
-- 镜像名称输入，支持直接输入完整名称或关键词搜索
-- 镜像站选择（复用现有 MIRROR_SITES 配置）
+- 只需输入包名，系统自动拼接完整镜像地址
+- 镜像源选择（预设 + 用户自定义）
 - 架构自动识别或手动选择
 - 实时日志流显示（WebSocket 接收）
 - 多层进度条显示
@@ -137,39 +145,51 @@ docker-pull-tar/
   "settings": {
     "defaultOutputDir": "C:\\Downloads",
     "defaultArch": "amd64",
-    "defaultMirror": "registry-1.docker.io",
-    "proxy": {
-      "http": "",
-      "https": ""
-    },
+    "defaultMirror": "docker.1ms.run",
     "downloadWorkers": 4
   },
-  "favorites": [
+  "mirrors": [
     {
-      "id": "uuid-1",
-      "name": "nginx",
-      "tag": "latest",
-      "arch": "amd64",
-      "mirror": "docker.1ms.run",
-      "addedAt": "2026-04-26T10:00:00"
+      "id": "dockerhub",
+      "name": "Docker Hub",
+      "registry": "registry-1.docker.io",
+      "isDefault": false
+    },
+    {
+      "id": "1ms",
+      "name": "1ms.run",
+      "registry": "docker.1ms.run",
+      "isDefault": true
+    },
+    {
+      "id": "custom-1",
+      "name": "自定义镜像源",
+      "registry": "my.registry.com",
+      "isDefault": false
     }
   ],
   "history": [
     {
       "id": "uuid-2",
-      "name": "alpine",
-      "tag": "3.18",
-      "arch": "arm64",
-      "mirror": "registry-1.docker.io",
+      "packageName": "nginx",
+      "tag": "latest",
+      "arch": "amd64",
+      "mirror": "docker.1ms.run",
+      "fullImage": "docker.1ms.run/library/nginx:latest",
       "status": "completed",
-      "outputPath": "C:\\Downloads\\alpine_3.18_arm64.tar",
+      "outputPath": "C:\\Downloads\\nginx_latest_amd64.tar",
       "downloadedAt": "2026-04-26T10:30:00",
-      "size": "5.2MB",
+      "size": "142MB",
       "error": null
     }
   ]
 }
 ```
+
+**镜像源管理：**
+- 预设镜像源（Docker Hub、1ms.run、DaoCloud 等）
+- 用户可添加自定义镜像源地址
+- 可设置默认镜像源
 
 ---
 
@@ -185,10 +205,11 @@ docker-pull-tar/
 │                                                     │
 │  ┌─────────────────────────────────────────────┐   │
 │  │ ✅ nginx:latest (amd64)                     │   │
-│  │    镜像站: Docker Hub                       │   │
+│  │    镜像源: docker.1ms.run                   │   │
+│  │    完整地址: docker.1ms.run/library/nginx   │   │
 │  │    路径: C:\Downloads\nginx_latest_amd64.tar│   │
 │  │    大小: 142MB    时间: 2026-04-26 10:00    │   │
-│  │    [重新下载] [打开目录] [添加到收藏]         │   │
+│  │    [重新下载] [打开目录]                      │   │
 │  └─────────────────────────────────────────────┘   │
 │                                                     │
 │  ┌─────────────────────────────────────────────┐   │
@@ -199,12 +220,6 @@ docker-pull-tar/
 │  └─────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
 ```
-
----
-
-### 4. 收藏镜像页面
-
-快速访问常用镜像，一键下载。
 
 ---
 
@@ -223,17 +238,18 @@ Vue3 渲染进程 ←→ Electron 主进程 ←→ FastAPI 子进程
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/download/start` | 开始下载 |
+| POST | `/api/download/start` | 开始下载（接收包名，自动拼接完整地址） |
 | POST | `/api/download/cancel` | 取消下载 |
 | GET | `/api/download/status` | 获取下载状态 |
 | GET | `/api/architectures` | 获取可用架构列表 |
 | GET | `/api/settings` | 获取用户设置 |
 | POST | `/api/settings` | 保存用户设置 |
+| GET | `/api/mirrors` | 获取镜像源列表 |
+| POST | `/api/mirrors` | 添加自定义镜像源 |
+| PUT | `/api/mirrors/:id` | 更新镜像源 |
+| DELETE | `/api/mirrors/:id` | 删除镜像源 |
 | GET | `/api/history` | 获取下载历史 |
 | DELETE | `/api/history/:id` | 删除历史记录 |
-| GET | `/api/favorites` | 获取收藏列表 |
-| POST | `/api/favorites` | 添加收藏 |
-| DELETE | `/api/favorites/:id` | 删除收藏 |
 
 ### WebSocket
 
@@ -416,13 +432,14 @@ pnpm electron:build   # 打包 Electron
 
 2. **阶段二：核心功能**
    - 实现下载 API（复用现有代码）
+   - 镜像地址自动拼接逻辑
    - WebSocket 日志推送
    - 主页下载界面
 
 3. **阶段三：用户设置**
    - 设置存储服务
-   - 历史记录功能
-   - 收藏功能
+   - 镜像源管理（预设 + 自定义）
+   - 下载历史功能
 
 4. **阶段四：打包发布**
    - 嵌入式 Python 配置
