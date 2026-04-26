@@ -16,7 +16,10 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // 禁用不必要的功能，减少 DevTools 错误
+      enableWebSQL: false,
+      spellcheck: false
     },
     icon: path.join(__dirname, '../../resources/icon.ico')
   })
@@ -24,6 +27,11 @@ function createWindow() {
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools()
+
+    // 禁用 DevTools 中不支持的协议请求警告
+    mainWindow.webContents.on('devtools-opened', () => {
+      // DevTools 打开后的处理
+    })
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
