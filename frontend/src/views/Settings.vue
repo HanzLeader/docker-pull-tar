@@ -26,15 +26,6 @@
           <el-slider v-model="settings.downloadWorkers" :min="1" :max="16" show-stops />
         </el-form-item>
 
-        <el-divider content-position="left">Docker Registry 认证</el-divider>
-        <el-form-item label="用户名">
-          <el-input v-model="settings.registryUsername" placeholder="用于私有仓库认证" clearable />
-        </el-form-item>
-
-        <el-form-item label="密码">
-          <el-input v-model="settings.registryPassword" type="password" placeholder="用于私有仓库认证" show-password clearable />
-        </el-form-item>
-
         <el-form-item>
           <el-button type="primary" @click="saveSettings">保存设置</el-button>
         </el-form-item>
@@ -50,34 +41,48 @@
       </template>
 
       <el-table :data="mirrors" style="width: 100%">
-        <el-table-column prop="name" label="名称" />
+        <el-table-column prop="name" label="名称" width="120" />
         <el-table-column prop="registry" label="地址" />
-        <el-table-column label="默认">
+        <el-table-column label="认证" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.username" type="success" size="small">已配置</el-tag>
+            <el-tag v-else type="info" size="small">无</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="默认" width="80">
           <template #default="{ row }">
             <el-tag v-if="row.isDefault" type="success">默认</el-tag>
             <el-button v-else size="small" @click="setDefaultMirror(row.id)">设为默认</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="操作">
+        <el-table-column label="操作" width="140">
           <template #default="{ row }">
+            <el-button size="small" @click="editMirror(row)">编辑</el-button>
             <el-button v-if="!row.isDefault" type="danger" size="small" @click="deleteMirror(row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="addMirrorVisible" title="添加镜像源">
+    <el-dialog v-model="addMirrorVisible" :title="editMode ? '编辑镜像源' : '添加镜像源'" width="400px">
       <el-form :model="newMirror" label-width="80px">
         <el-form-item label="名称">
           <el-input v-model="newMirror.name" placeholder="例如: 自定义镜像源" />
         </el-form-item>
         <el-form-item label="地址">
-          <el-input v-model="newMirror.registry" placeholder="例如: my.registry.com" />
+          <el-input v-model="newMirror.registry" placeholder="例如: my.registry.com" :disabled="editMode" />
+        </el-form-item>
+        <el-divider content-position="left">认证配置（私有仓库）</el-divider>
+        <el-form-item label="用户名">
+          <el-input v-model="newMirror.username" placeholder="可选，用于私有仓库" clearable />
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input v-model="newMirror.password" type="password" placeholder="可选，用于私有仓库" show-password clearable />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="addMirrorVisible = false">取消</el-button>
-        <el-button type="primary" @click="addMirror">添加</el-button>
+        <el-button type="primary" @click="saveMirror">{{ editMode ? '保存' : '添加' }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -93,16 +98,18 @@ const settingsStore = useSettingsStore()
 const settings = reactive({
   defaultOutputDir: '',
   defaultArch: 'amd64',
-  downloadWorkers: 4,
-  registryUsername: '',
-  registryPassword: ''
+  downloadWorkers: 4
 })
 
 const mirrors = ref([])
 const addMirrorVisible = ref(false)
+const editMode = ref(false)
+const editingMirrorId = ref('')
 const newMirror = reactive({
   name: '',
-  registry: ''
+  registry: '',
+  username: '',
+  password: ''
 })
 
 onMounted(async () => {
@@ -130,29 +137,57 @@ const selectOutputDir = async () => {
 }
 
 const showAddMirror = () => {
+  editMode.value = false
+  editingMirrorId.value = ''
   newMirror.name = ''
   newMirror.registry = ''
+  newMirror.username = ''
+  newMirror.password = ''
   addMirrorVisible.value = true
 }
 
-const addMirror = async () => {
+const editMirror = (mirror) => {
+  editMode.value = true
+  editingMirrorId.value = mirror.id
+  newMirror.name = mirror.name
+  newMirror.registry = mirror.registry
+  newMirror.username = mirror.username || ''
+  newMirror.password = mirror.password || ''
+  addMirrorVisible.value = true
+}
+
+const saveMirror = async () => {
   if (!newMirror.name || !newMirror.registry) {
     ElMessage.warning('请填写名称和地址')
     return
   }
 
   try {
-    await settingsStore.addMirror({
-      id: '',
-      name: newMirror.name,
-      registry: newMirror.registry,
-      isDefault: false
-    })
+    if (editMode.value) {
+      await settingsStore.updateMirror(editingMirrorId.value, {
+        id: editingMirrorId.value,
+        name: newMirror.name,
+        registry: newMirror.registry,
+        isDefault: mirrors.value.find(m => m.id === editingMirrorId.value)?.isDefault || false,
+        username: newMirror.username || null,
+        password: newMirror.password || null
+      })
+      ElMessage.success('镜像源已更新')
+    } else {
+      await settingsStore.addMirror({
+        id: '',
+        name: newMirror.name,
+        registry: newMirror.registry,
+        isDefault: false,
+        username: newMirror.username || null,
+        password: newMirror.password || null
+      })
+      ElMessage.success('镜像源已添加')
+    }
     mirrors.value = settingsStore.mirrors
     addMirrorVisible.value = false
-    ElMessage.success('镜像源已添加')
   } catch (error) {
-    ElMessage.error('添加失败')
+    ElMessage.error(editMode.value ? '更新失败' : '添加失败')
   }
 }
 

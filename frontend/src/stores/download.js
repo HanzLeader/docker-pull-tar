@@ -37,14 +37,17 @@ export const useDownloadStore = defineStore('download', {
       this.arch = settingsStore.settings.defaultArch
       this.outputDir = settingsStore.settings.defaultOutputDir
 
+      // 从镜像源获取认证信息
+      const credentials = settingsStore.getMirrorCredentials(parsed.registry)
+
       const res = await downloadApi.start({
         packageName: parsed.packageName,
         tag: parsed.tag,
         arch: this.arch,
         mirror: parsed.registry,
         outputDir: this.outputDir,
-        username: settingsStore.settings.registryUsername || null,
-        password: settingsStore.settings.registryPassword || null
+        username: credentials.username,
+        password: credentials.password
       })
 
       this.status = 'downloading'

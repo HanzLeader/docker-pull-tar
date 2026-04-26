@@ -19,6 +19,9 @@ class MirrorSource(BaseModel):
     name: str
     registry: str
     isDefault: bool = False
+    # 每个镜像源可有独立的认证信息
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class Settings(BaseModel):
@@ -26,9 +29,6 @@ class Settings(BaseModel):
     defaultArch: str = "amd64"
     defaultMirror: str = "docker.1ms.run"
     downloadWorkers: int = Field(default=4, ge=1, le=16)
-    # Docker Registry 认证
-    registryUsername: Optional[str] = None
-    registryPassword: Optional[str] = None
 
 
 class DownloadRequest(BaseModel):
