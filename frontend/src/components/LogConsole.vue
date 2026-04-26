@@ -16,20 +16,21 @@
   </div>
 </template>
 
-<script setup>
-import { ref, watch, nextTick } from 'vue'
+<script setup lang="ts">
+import { ref, watch, nextTick, computed } from 'vue'
 import { useDownloadStore } from '@/stores/download'
+import type { WebSocketLogMessage } from '@/types/api'
 
 const downloadStore = useDownloadStore()
-const logContainer = ref(null)
+const logContainer = ref<HTMLDivElement | null>(null)
 
-const logs = downloadStore.logs
+const logs = computed(() => downloadStore.logs)
 
-const clearLogs = () => {
+const clearLogs = (): void => {
   downloadStore.clearLogs()
 }
 
-const formatTime = (timestamp) => {
+const formatTime = (timestamp: string | null): string => {
   if (!timestamp) return ''
   const date = new Date(timestamp)
   return date.toLocaleTimeString('zh-CN', { hour12: false })
@@ -65,7 +66,7 @@ watch(
   font-weight: bold;
 }
 .log-content {
-  max-height: 200px;
+  height: 200px;
   overflow-y: auto;
   font-family: monospace;
   font-size: 12px;
