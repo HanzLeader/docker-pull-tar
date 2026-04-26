@@ -6,3 +6,14 @@ build/
 *.spec
 *.zip
 *.tar
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+
+# Node
+node_modules/
+pnpm-lock.yaml
