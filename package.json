@@ -6,6 +6,6 @@
   "scripts": {
     "dev": "pnpm --filter frontend electron:dev",
     "build": "pnpm --filter frontend electron:build",
-    "start": "frontend/dist-electron/win-unpacked/DockerPull.exe"
+    "start": "node -e \"require('child_process').spawn('./frontend/dist-electron/win-unpacked/DockerPull.exe', [], {stdio:'inherit'})\""
   }
 }
