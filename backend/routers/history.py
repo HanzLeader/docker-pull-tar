@@ -1,8 +1,13 @@
-from fastapi import APIRouter
-from models.schemas import HistoryItem
-from services.settings_store import SettingsStore
+# 标准库
 import uuid
 from datetime import datetime
+
+# 第三方库
+from fastapi import APIRouter
+
+# 本地模块
+from ..models.schemas import HistoryItem
+from ..services.settings_store import SettingsStore
 
 router = APIRouter(prefix="/api", tags=["history"])
 store = SettingsStore()

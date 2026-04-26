@@ -26,6 +26,9 @@ class Settings(BaseModel):
     defaultArch: str = "amd64"
     defaultMirror: str = "docker.1ms.run"
     downloadWorkers: int = Field(default=4, ge=1, le=16)
+    # Docker Registry 认证
+    registryUsername: Optional[str] = None
+    registryPassword: Optional[str] = None
 
 
 class DownloadRequest(BaseModel):
@@ -34,6 +37,9 @@ class DownloadRequest(BaseModel):
     arch: Optional[str] = None
     mirror: Optional[str] = None
     outputDir: Optional[str] = None
+    # 认证信息（可选，用于私有仓库）
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class DownloadProgress(BaseModel):

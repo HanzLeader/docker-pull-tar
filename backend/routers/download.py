@@ -1,13 +1,20 @@
-from fastapi import APIRouter
-from models.schemas import DownloadRequest, DownloadStatus
-from services.log_websocket import log_manager
+# 标准库
 import asyncio
+
+# 第三方库
+from fastapi import APIRouter
+
+# 本地模块
+from ..models.schemas import DownloadRequest, DownloadStatus
+from ..services.log_websocket import log_manager
 
 router = APIRouter(prefix="/api", tags=["download"])
 
 download_state = {
     "status": DownloadStatus.idle,
     "packageName": "",
+    "username": None,
+    "password": None,
     "progress": {
         "currentLayer": 0,
         "totalLayers": 0,
@@ -29,10 +36,19 @@ async def start_download(request: DownloadRequest):
 
     download_state["status"] = DownloadStatus.preparing
     download_state["packageName"] = request.packageName
+    download_state["username"] = request.username
+    download_state["password"] = request.password
 
     await log_manager.send_log("info", f"开始下载 {request.packageName}:{request.tag}")
 
-    return {"status": "started", "packageName": request.packageName}
+    if request.username:
+        await log_manager.send_log("info", f"使用认证: {request.username}")
+
+    return {
+        "status": "started",
+        "packageName": request.packageName,
+        "authEnabled": request.username is not None
+    }
 
 @router.post("/download/cancel")
 async def cancel_download():

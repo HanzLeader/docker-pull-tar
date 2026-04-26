@@ -42,7 +42,9 @@ export const useDownloadStore = defineStore('download', {
         tag: parsed.tag,
         arch: this.arch,
         mirror: parsed.registry,
-        outputDir: this.outputDir
+        outputDir: this.outputDir,
+        username: settingsStore.settings.registryUsername || null,
+        password: settingsStore.settings.registryPassword || null
       })
 
       this.status = 'downloading'

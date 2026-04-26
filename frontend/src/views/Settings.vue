@@ -26,6 +26,15 @@
           <el-slider v-model="settings.downloadWorkers" :min="1" :max="16" show-stops />
         </el-form-item>
 
+        <el-divider content-position="left">Docker Registry 认证</el-divider>
+        <el-form-item label="用户名">
+          <el-input v-model="settings.registryUsername" placeholder="用于私有仓库认证" clearable />
+        </el-form-item>
+
+        <el-form-item label="密码">
+          <el-input v-model="settings.registryPassword" type="password" placeholder="用于私有仓库认证" show-password clearable />
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" @click="saveSettings">保存设置</el-button>
         </el-form-item>
@@ -84,7 +93,9 @@ const settingsStore = useSettingsStore()
 const settings = reactive({
   defaultOutputDir: '',
   defaultArch: 'amd64',
-  downloadWorkers: 4
+  downloadWorkers: 4,
+  registryUsername: '',
+  registryPassword: ''
 })
 
 const mirrors = ref([])

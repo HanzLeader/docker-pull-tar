@@ -4,9 +4,9 @@
   "private": true,
   "description": "Docker 镜像下载桌面应用",
   "scripts": {
-    "dev": "pnpm --filter frontend dev",
-    "build": "pnpm --filter frontend build",
     "electron:dev": "pnpm --filter frontend electron:dev",
-    "electron:build": "pnpm --filter frontend electron:build"
+    "electron:build": "pnpm --filter frontend electron:build",
+    "dev": "pnpm --filter frontend dev",
+    "build": "pnpm --filter frontend build"
   }
 }
