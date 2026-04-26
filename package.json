@@ -8,10 +8,10 @@
     "electron:build": "pnpm --filter frontend electron:build",
     "dev": "pnpm --filter frontend dev",
     "build": "pnpm --filter frontend build",
-    "build:full": "pyinstaller backend.spec --clean --noconfirm && mkdir -p backend-dist && cp dist/backend.exe backend-dist/ && cd frontend && npm run electron:compile && npm run build && npx electron-builder --config electron-builder.json && cd ..",
-    "build:frontend": "cd frontend && npm run build && npx asar extract dist-electron/win-unpacked/resources/app.asar dist-electron/app-extracted && rm -rf dist-electron/app-extracted/dist && cp -r dist dist-electron/app-extracted/ && npx asar pack dist-electron/app-extracted dist-electron/win-unpacked/resources/app.asar && rm -rf dist-electron/app-extracted && cd ..",
-    "build:electron": "cd frontend && npm run electron:compile && npx asar extract dist-electron/win-unpacked/resources/app.asar dist-electron/app-extracted && cp electron/dist/main.js dist-electron/app-extracted/electron/dist/main.js && npx asar pack dist-electron/app-extracted dist-electron/win-unpacked/resources/app.asar && rm -rf dist-electron/app-extracted && cd ..",
-    "build:backend": "pyinstaller backend.spec --clean --noconfirm && mkdir -p backend-dist && cp dist/backend.exe backend-dist/",
-    "kill": "taskkill //F //IM DockerPull.exe 2>/dev/null; taskkill //F //IM backend.exe 2>/dev/null"
+    "build:backend": "python -m PyInstaller backend.spec --clean --noconfirm && node -e \"const fs=require('fs');if(!fs.existsSync('backend-dist'))fs.mkdirSync('backend-dist');fs.copyFileSync('dist/backend.exe','backend-dist/backend.exe')\"",
+    "build:full": "npm run build:backend && cd frontend && npm run electron:compile && npm run build && npx electron-builder --config electron-builder.json && cd ..",
+    "build:frontend": "cd frontend && npm run build && npm run asar:update-frontend && cd ..",
+    "build:electron": "cd frontend && npm run electron:compile && npm run asar:update-electron && cd ..",
+    "kill": "taskkill /F /IM DockerPull.exe & taskkill /F /IM backend.exe"
   }
 }
