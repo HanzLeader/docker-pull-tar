@@ -31,6 +31,9 @@ html, body {
   padding: 0;
   overflow: hidden;
 }
+.el-main {
+  padding: 0 !important;
+}
 .app-container {
   height: 100vh;
   overflow: hidden;
