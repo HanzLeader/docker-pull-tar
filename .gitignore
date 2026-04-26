@@ -3,6 +3,9 @@ test.py
 !.gitignore
 dist/
 build/
+backend-dist/
+frontend/dist/
+frontend/dist-electron/
 *.spec
 *.zip
 *.tar
