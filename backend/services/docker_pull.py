@@ -21,9 +21,9 @@ from urllib3.util.retry import Retry
 import urllib3
 
 # 本地模块
-from ..models.schemas import DownloadStatus
-from ..services.log_websocket import log_manager
-from ..services.settings_store import SettingsStore
+from models.schemas import DownloadStatus
+from services.log_websocket import log_manager
+from services.settings_store import SettingsStore
 
 urllib3.disable_warnings()
 
@@ -177,12 +177,12 @@ class DockerPullService:
 
             await self._send_log("info", f"📁 输出目录: {output_path}")
 
-            # 获取认证
-            auth_head = self.get_auth_head(registry, image_info.repository, username, password)
+            # 获取认证 - 使用 asyncio.to_thread 避免阻塞事件循环
+            auth_head = await asyncio.to_thread(self.get_auth_head, registry, image_info.repository, username, password)
 
             # 获取 manifest
             manifest_url = f'https://{registry}/v2/{image_info.repository}/manifests/{tag}'
-            resp = self.session.get(manifest_url, headers=auth_head, verify=False, timeout=60)
+            resp = await asyncio.to_thread(self.session.get, manifest_url, headers=auth_head, verify=False, timeout=60)
 
             if resp.status_code == 401:
                 await self._send_log("error", "认证失败，请检查用户名密码")
@@ -214,7 +214,7 @@ class DockerPullService:
                 arch_headers['Accept'] = media_type
 
                 manifest_url = f'https://{registry}/v2/{image_info.repository}/manifests/{digest}'
-                resp = self.session.get(manifest_url, headers=arch_headers, verify=False, timeout=60)
+                resp = await asyncio.to_thread(self.session.get, manifest_url, headers=arch_headers, verify=False, timeout=60)
 
                 if resp.status_code != 200:
                     await self._send_log("error", f"获取架构 manifest 失败: {resp.status_code}")
@@ -234,16 +234,18 @@ class DockerPullService:
             await self._send_log("info", f"📦 共 {total_layers} 个层需要下载")
 
             # 初始化进度
+            total_bytes = sum(l.get('size', 0) for l in layers)
             self.progress_data = {
                 "totalLayers": total_layers,
                 "currentLayer": 0,
                 "downloadedBytes": 0,
-                "totalBytes": 0,
+                "totalBytes": total_bytes,
                 "speed": 0,
-                "layers": [{"digest": l['digest'][:12], "size": l.get('size', 0), "status": "waiting"} for l in layers]
+                "layers": [{"digest": l['digest'][:12], "size": l.get('size', 0), "status": "waiting", "downloaded": 0, "total": l.get('size', 0)} for l in layers]
             }
 
             await self._send_progress(self.progress_data)
+            await self._send_log("info", f"📦 镜像总大小: {self._format_size(total_bytes)}")
 
             # 下载层
             imgdir = str(output_path / 'layers')
@@ -303,13 +305,14 @@ class DockerPullService:
                 config_path = os.path.join(imgdir, config_filename)
                 config_url = f'https://{registry}/v2/{image_info.repository}/blobs/{config_digest}'
 
-                resp = self.session.get(config_url, headers=auth_head, verify=False, timeout=60, stream=True)
-                resp.raise_for_status()
+                def download_config():
+                    resp = self.session.get(config_url, headers=auth_head, verify=False, timeout=60, stream=True)
+                    resp.raise_for_status()
+                    with open(config_path, 'wb') as f:
+                        for chunk in resp.iter_content(chunk_size=65536):
+                            f.write(chunk)
 
-                with open(config_path, 'wb') as f:
-                    for chunk in resp.iter_content(chunk_size=65536):
-                        f.write(chunk)
-
+                await asyncio.to_thread(download_config)
                 content[0]['Config'] = config_filename
 
             # 解压层文件并构建 manifest
@@ -375,11 +378,13 @@ class DockerPullService:
             return False
 
     async def _download_layer(self, url: str, headers: Dict, save_path: str, digest: str, expected_size: int, stats: DownloadStats) -> bool:
-        """下载单个层"""
-        sha256_hash = hashlib.sha256()
-        downloaded = 0
+        """下载单个层 - 使用线程池避免阻塞事件循环"""
+        layer_idx = self.progress_data.get("currentLayer", 1) - 1
 
-        try:
+        def sync_download():
+            sha256_hash = hashlib.sha256()
+            downloaded = 0
+
             resp = self.session.get(url, headers=headers, verify=False, timeout=120, stream=True)
             resp.raise_for_status()
 
@@ -394,7 +399,7 @@ class DockerPullService:
             with open(save_path, 'wb') as f:
                 for chunk in resp.iter_content(chunk_size=65536):
                     if self.stop_event.is_set():
-                        return False
+                        return False, 0, 0
 
                     if chunk:
                         f.write(chunk)
@@ -410,13 +415,35 @@ class DockerPullService:
                             last_downloaded = downloaded
                             last_time = current_time
 
-            # 验证 digest
             actual_digest = f'sha256:{sha256_hash.hexdigest()}'
-            if actual_digest != digest:
-                await self._send_log("warning", f"校验失败，但文件已保存")
+            return True, downloaded, total_size
 
-            return True
+        # 使用线程池执行下载，每隔一段时间检查进度
+        loop = asyncio.get_event_loop()
+        future = loop.run_in_executor(None, sync_download)
 
+        # 定期检查进度并发送更新
+        while not future.done():
+            await asyncio.sleep(1.0)  # 每秒检查一次
+            if not future.done():
+                self.progress_data["downloadedBytes"] = int(stats.downloaded_size)
+                self.progress_data["speed"] = int(stats.get_avg_speed())
+                if layer_idx >= 0 and layer_idx < len(self.progress_data.get("layers", [])):
+                    self.progress_data["layers"][layer_idx]["downloaded"] = stats.downloaded_size
+                    self.progress_data["layers"][layer_idx]["total"] = expected_size
+                await self._send_progress(self.progress_data)
+
+        # 获取结果
+        try:
+            success, downloaded, total_size = future.result()
+            if success:
+                self.progress_data["downloadedBytes"] = int(stats.downloaded_size)
+                self.progress_data["speed"] = int(stats.get_avg_speed())
+                if layer_idx >= 0 and layer_idx < len(self.progress_data.get("layers", [])):
+                    self.progress_data["layers"][layer_idx]["downloaded"] = downloaded
+                    self.progress_data["layers"][layer_idx]["total"] = total_size
+                await self._send_progress(self.progress_data)
+            return success
         except Exception as e:
             await self._send_log("error", f"下载层失败: {str(e)}")
             return False
@@ -432,7 +459,7 @@ class DockerPullService:
     def _save_history(self, package_name: str, tag: str, arch: str, registry: str, full_image: str, output_path: str):
         """保存下载历史"""
         import uuid
-        from ..models.schemas import HistoryItem
+        from models.schemas import HistoryItem
 
         item = HistoryItem(
             id=str(uuid.uuid4()),

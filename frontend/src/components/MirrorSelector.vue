@@ -19,31 +19,37 @@
   </el-select>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
+import type { Mirror } from '@/types/api'
 
-const props = defineProps({
-  modelValue: {
-    type: String,
-    default: ''
-  }
+interface Props {
+  modelValue: string
+  disabled?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  modelValue: '',
+  disabled: false
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: string): void
+}>()
 
 const settingsStore = useSettingsStore()
-const mirrors = computed(() => settingsStore.mirrors)
+const mirrors = computed<Mirror[]>(() => settingsStore.mirrors)
 
-const selectedMirror = ref(props.modelValue || settingsStore.getDefaultMirrorRegistry())
+const selectedMirror = ref<string>(props.modelValue || settingsStore.getDefaultMirrorRegistry())
 
-watch(() => props.modelValue, (val) => {
+watch(() => props.modelValue, (val: string) => {
   if (val) {
     selectedMirror.value = val
   }
 })
 
-const handleChange = (value) => {
+const handleChange = (value: string): void => {
   emit('update:modelValue', value)
 }
 </script>

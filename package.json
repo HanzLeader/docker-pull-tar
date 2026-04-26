@@ -5,7 +5,7 @@
   "description": "Docker 镜像下载",
   "scripts": {
     "dev": "pnpm --filter frontend electron:dev",
-    "build": "pnpm --filter frontend electron:build",
-    "start": "node -e \"require('child_process').spawn('./frontend/dist-electron/win-unpacked/DockerPull.exe', [], {stdio:'inherit'})\""
+    "start": "node -e \"require('child_process').spawn('./frontend/dist-electron/win-unpacked/DockerPull.exe', [], {stdio:'inherit'})\"",
+    "build": "pnpm --filter frontend electron:build"
   }
 }

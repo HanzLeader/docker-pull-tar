@@ -30,6 +30,18 @@ export const useSettingsStore = defineStore('settings', {
         ])
         this.settings = settingsRes.data
         this.mirrors = mirrorsRes.data
+        console.log('Settings loaded:', this.settings)
+        console.log('Mirrors loaded:', this.mirrors.length)
+      } catch (error) {
+        console.error('Failed to load settings:', error)
+        // 设置默认值防止页面崩溃
+        this.settings = {
+          defaultOutputDir: '',
+          defaultArch: 'amd64',
+          defaultMirror: 'docker.1ms.run',
+          downloadWorkers: 4
+        }
+        this.mirrors = []
       } finally {
         this.loading = false
       }

@@ -5,8 +5,8 @@ import uuid
 from fastapi import APIRouter, HTTPException
 
 # 本地模块
-from ..models.schemas import Settings, MirrorSource
-from ..services.settings_store import SettingsStore
+from models.schemas import Settings, MirrorSource
+from services.settings_store import SettingsStore
 
 router = APIRouter(prefix="/api", tags=["settings"])
 store = SettingsStore()

@@ -7,10 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # 本地模块
-from .routers import settings
-from .routers import download
-from .routers import history
-from .services.log_websocket import log_manager
+from routers import settings
+from routers import download
+from routers import history
+from services.log_websocket import log_manager
 
 app = FastAPI(
     title="Docker Pull API",

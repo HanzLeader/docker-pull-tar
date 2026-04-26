@@ -88,24 +88,34 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useSettingsStore } from '@/stores/settings'
+import type { AppSettings, Mirror } from '@/types/api'
 
 const settingsStore = useSettingsStore()
 
-const settings = reactive({
+const settings: AppSettings = reactive({
   defaultOutputDir: '',
   defaultArch: 'amd64',
+  defaultMirror: 'docker.1ms.run',
   downloadWorkers: 4
 })
 
-const mirrors = ref([])
-const addMirrorVisible = ref(false)
-const editMode = ref(false)
-const editingMirrorId = ref('')
-const newMirror = reactive({
+const mirrors = ref<Mirror[]>([])
+const addMirrorVisible = ref<boolean>(false)
+const editMode = ref<boolean>(false)
+const editingMirrorId = ref<string>('')
+
+interface NewMirrorForm {
+  name: string
+  registry: string
+  username: string
+  password: string
+}
+
+const newMirror: NewMirrorForm = reactive({
   name: '',
   registry: '',
   username: '',
@@ -113,12 +123,20 @@ const newMirror = reactive({
 })
 
 onMounted(async () => {
-  await settingsStore.loadSettings()
-  Object.assign(settings, settingsStore.settings)
-  mirrors.value = settingsStore.mirrors
+  console.log('Settings page mounted, loading settings...')
+  try {
+    await settingsStore.loadSettings()
+    Object.assign(settings, settingsStore.settings)
+    mirrors.value = settingsStore.mirrors
+    console.log('Settings loaded successfully:', settings)
+    console.log('Mirrors loaded successfully:', mirrors.value.length)
+  } catch (error) {
+    console.error('Failed to load settings on mount:', error)
+    ElMessage.error('加载配置失败，请检查后端服务是否启动')
+  }
 })
 
-const saveSettings = async () => {
+const saveSettings = async (): Promise<void> => {
   try {
     await settingsStore.updateSettings(settings)
     ElMessage.success('设置已保存')
@@ -127,7 +145,7 @@ const saveSettings = async () => {
   }
 }
 
-const selectOutputDir = async () => {
+const selectOutputDir = async (): Promise<void> => {
   if (window.electronAPI?.selectDirectory) {
     const path = await window.electronAPI.selectDirectory()
     if (path) {
@@ -136,7 +154,7 @@ const selectOutputDir = async () => {
   }
 }
 
-const showAddMirror = () => {
+const showAddMirror = (): void => {
   editMode.value = false
   editingMirrorId.value = ''
   newMirror.name = ''
@@ -146,7 +164,7 @@ const showAddMirror = () => {
   addMirrorVisible.value = true
 }
 
-const editMirror = (mirror) => {
+const editMirror = (mirror: Mirror): void => {
   editMode.value = true
   editingMirrorId.value = mirror.id
   newMirror.name = mirror.name
@@ -156,7 +174,7 @@ const editMirror = (mirror) => {
   addMirrorVisible.value = true
 }
 
-const saveMirror = async () => {
+const saveMirror = async (): Promise<void> => {
   if (!newMirror.name || !newMirror.registry) {
     ElMessage.warning('请填写名称和地址')
     return
@@ -168,14 +186,13 @@ const saveMirror = async () => {
         id: editingMirrorId.value,
         name: newMirror.name,
         registry: newMirror.registry,
-        isDefault: mirrors.value.find(m => m.id === editingMirrorId.value)?.isDefault || false,
+        isDefault: mirrors.value.find((m: Mirror) => m.id === editingMirrorId.value)?.isDefault || false,
         username: newMirror.username || null,
         password: newMirror.password || null
       })
       ElMessage.success('镜像源已更新')
     } else {
       await settingsStore.addMirror({
-        id: '',
         name: newMirror.name,
         registry: newMirror.registry,
         isDefault: false,
@@ -191,7 +208,7 @@ const saveMirror = async () => {
   }
 }
 
-const setDefaultMirror = async (id) => {
+const setDefaultMirror = async (id: string): Promise<void> => {
   try {
     await settingsStore.setDefaultMirror(id)
     mirrors.value = settingsStore.mirrors
@@ -201,7 +218,7 @@ const setDefaultMirror = async (id) => {
   }
 }
 
-const deleteMirror = async (id) => {
+const deleteMirror = async (id: string): Promise<void> => {
   try {
     await ElMessageBox.confirm('确定要删除此镜像源吗？', '警告', {
       type: 'warning'

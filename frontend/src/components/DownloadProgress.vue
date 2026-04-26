@@ -7,12 +7,12 @@
     <div class="progress-layers">
       <div v-for="(layer, index) in layers" :key="index" class="layer-item">
         <div class="layer-header">
-          <span class="layer-status-icon">{{ layer.completed ? '✅' : layer.downloading ? '⬇️' : '⏳' }}</span>
-          <span class="layer-name">{{ layer.name }}</span>
+          <span class="layer-status-icon">{{ layer.status === 'completed' ? '✅' : layer.status === 'downloading' ? '⬇️' : '⏳' }}</span>
+          <span class="layer-name">{{ layer.digest.substring(0, 12) }}</span>
         </div>
         <el-progress
-          :percentage="layer.percentage"
-          :status="layer.completed ? 'success' : ''"
+          :percentage="getPercentage(layer)"
+          :status="layer.status === 'completed' ? 'success' : ''"
           :stroke-width="10"
         />
         <div class="layer-info">
@@ -27,17 +27,18 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useDownloadStore } from '@/stores/download'
+import type { DownloadStatus, LayerProgress } from '@/types/api'
 
 const downloadStore = useDownloadStore()
 
-const status = downloadStore.status
+const status: DownloadStatus = downloadStore.status
 const progress = downloadStore.progress
 
-const statusText = computed(() => {
-  const texts = {
+const statusText = computed<string>(() => {
+  const texts: Record<DownloadStatus, string> = {
     idle: '空闲',
     preparing: '准备中',
     downloading: '下载中',
@@ -48,15 +49,15 @@ const statusText = computed(() => {
   return texts[status] || '未知'
 })
 
-const layers = computed(() => progress.layers || [])
-const currentLayer = computed(() => progress.currentLayer || 0)
-const totalLayers = computed(() => progress.totalLayers || 0)
-const speed = computed(() => progress.speed || 0)
+const layers = computed<LayerProgress[]>(() => progress.layers || [])
+const currentLayer = computed<number>(() => progress.currentLayer || 0)
+const totalLayers = computed<number>(() => progress.totalLayers || 0)
+const speed = computed<number>(() => progress.speed || 0)
 
-const formatSize = (bytes) => {
+const formatSize = (bytes: number): string => {
   if (!bytes) return '0B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let size = bytes
+  const units: string[] = ['B', 'KB', 'MB', 'GB']
+  let size: number = bytes
   for (const unit of units) {
     if (size < 1024) return `${size.toFixed(1)}${unit}`
     size /= 1024
@@ -64,8 +65,13 @@ const formatSize = (bytes) => {
   return `${size.toFixed(1)}TB`
 }
 
-const formatSpeed = (bytesPerSec) => {
+const formatSpeed = (bytesPerSec: number): string => {
   return formatSize(bytesPerSec) + '/s'
+}
+
+const getPercentage = (layer: LayerProgress): number => {
+  if (layer.total === 0) return 0
+  return Math.round((layer.downloaded / layer.total) * 100)
 }
 </script>
 

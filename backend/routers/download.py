@@ -7,9 +7,9 @@ from pathlib import Path
 from fastapi import APIRouter
 
 # 本地模块
-from ..models.schemas import DownloadRequest, DownloadStatus
-from ..services.log_websocket import log_manager
-from ..services.docker_pull import pull_service
+from models.schemas import DownloadRequest, DownloadStatus
+from services.log_websocket import log_manager
+from services.docker_pull import pull_service
 
 router = APIRouter(prefix="/api", tags=["download"])
 

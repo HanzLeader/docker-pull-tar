@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 # 本地模块
-from ..models.schemas import ConfigData, MirrorSource, HistoryItem, Settings
+from models.schemas import ConfigData, MirrorSource, HistoryItem, Settings
 
 
 class SettingsStore:

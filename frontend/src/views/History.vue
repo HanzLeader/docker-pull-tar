@@ -58,12 +58,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { historyApi } from '@/api'
+import type { HistoryItem } from '@/types/api'
 
-const history = ref([])
+const history = ref<HistoryItem[]>([])
 
 onMounted(async () => {
   await loadHistory()
@@ -93,21 +94,21 @@ const clearHistory = async () => {
   }
 }
 
-const deleteHistory = async (id) => {
+const deleteHistory = async (id: string): Promise<void> => {
   try {
     await historyApi.delete(id)
-    history.value = history.value.filter(h => h.id !== id)
+    history.value = history.value.filter((h: HistoryItem) => h.id !== id)
     ElMessage.success('已删除')
   } catch (error) {
     ElMessage.error('删除失败')
   }
 }
 
-const redownload = (item) => {
+const redownload = (_item: HistoryItem): void => {
   ElMessage.info('重新下载功能待实现')
 }
 
-const openDirectory = async (path) => {
+const openDirectory = async (path: string): Promise<void> => {
   if (window.electronAPI?.openDirectory) {
     await window.electronAPI.openDirectory(path)
   } else {
@@ -115,7 +116,7 @@ const openDirectory = async (path) => {
   }
 }
 
-const formatTime = (timestamp) => {
+const formatTime = (timestamp: string | null): string => {
   if (!timestamp) return '未知'
   return new Date(timestamp).toLocaleString('zh-CN')
 }

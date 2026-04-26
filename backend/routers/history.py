@@ -6,8 +6,8 @@ from datetime import datetime
 from fastapi import APIRouter
 
 # 本地模块
-from ..models.schemas import HistoryItem
-from ..services.settings_store import SettingsStore
+from models.schemas import HistoryItem
+from services.settings_store import SettingsStore
 
 router = APIRouter(prefix="/api", tags=["history"])
 store = SettingsStore()
