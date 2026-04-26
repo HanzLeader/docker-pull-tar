@@ -17,17 +17,23 @@
   </el-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const activeMenu = computed(() => route.path)
+const activeMenu = computed<string>(() => route.path)
 </script>
 
 <style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
 .app-container {
   height: 100vh;
+  overflow: hidden;
 }
 .app-header {
   display: flex;

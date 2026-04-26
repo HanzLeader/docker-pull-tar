@@ -54,21 +54,12 @@
         </el-form-item>
       </el-form>
 
-      <div v-if="parsedPreview" class="parsed-preview">
-        <el-alert type="info" :closable="false">
-          <template #title>
-            完整镜像地址: {{ parsedPreview.fullImage }}
-          </template>
-        </el-alert>
-      </div>
-
       <LogConsole />
-      <DownloadProgress />
     </el-card>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useSettingsStore } from '@/stores/settings'
@@ -76,28 +67,44 @@ import { useDownloadStore } from '@/stores/download'
 import { parseImageInput } from '@/utils/imageParser'
 import MirrorSelector from '@/components/MirrorSelector.vue'
 import LogConsole from '@/components/LogConsole.vue'
-import DownloadProgress from '@/components/DownloadProgress.vue'
 
 const settingsStore = useSettingsStore()
 const downloadStore = useDownloadStore()
 
-const form = ref({
+interface FormState {
+  packageName: string
+  mirror: string
+  arch: string
+  outputDir: string
+}
+
+const form = ref<FormState>({
   packageName: '',
   mirror: '',
   arch: 'amd64',
   outputDir: ''
 })
 
-const parsedPreview = ref(null)
-
-const isDownloading = computed(() => downloadStore.status === 'downloading' || downloadStore.status === 'preparing')
+const isDownloading = computed<boolean>(() => downloadStore.status === 'downloading' || downloadStore.status === 'preparing')
 
 onMounted(async () => {
-  await settingsStore.loadSettings()
-  form.value.arch = settingsStore.settings.defaultArch
-  form.value.outputDir = settingsStore.settings.defaultOutputDir
-  form.value.mirror = settingsStore.getDefaultMirrorRegistry()
-  downloadStore.connectWebSocket()
+  console.log('Home page mounted, loading settings...')
+  try {
+    await settingsStore.loadSettings()
+    form.value.arch = settingsStore.settings.defaultArch
+    form.value.outputDir = settingsStore.settings.defaultOutputDir
+    form.value.mirror = settingsStore.getDefaultMirrorRegistry()
+    console.log('Settings loaded:', form.value)
+    downloadStore.connectWebSocket()
+    downloadStore.startPolling()
+  } catch (error) {
+    console.error('Failed to load settings on mount:', error)
+    ElMessage.error('加载配置失败，请检查后端服务是否启动')
+    // 使用默认值
+    form.value.arch = 'amd64'
+    form.value.outputDir = ''
+    form.value.mirror = 'docker.1ms.run'
+  }
 })
 
 onUnmounted(() => {
@@ -109,9 +116,9 @@ const parseAndPreview = () => {
     ElMessage.warning('请输入镜像包名')
     return
   }
-  parsedPreview.value = parseImageInput(form.value.packageName, form.value.mirror)
-  if (parsedPreview.value) {
-    ElMessage.success('解析成功')
+  const parsed = parseImageInput(form.value.packageName, form.value.mirror)
+  if (parsed) {
+    ElMessage.success(`完整镜像地址: ${parsed.fullImage}`)
   }
 }
 
@@ -121,13 +128,23 @@ const startDownload = async () => {
     return
   }
 
-  parsedPreview.value = parseImageInput(form.value.packageName, form.value.mirror)
+  if (!form.value.outputDir) {
+    ElMessage.warning('请选择输出目录')
+    return
+  }
+
+  // 保存选择的目录到 settings（持久化）
+  if (form.value.outputDir !== settingsStore.settings.defaultOutputDir) {
+    await settingsStore.updateSettings({ defaultOutputDir: form.value.outputDir })
+  }
 
   try {
-    await downloadStore.startDownload(form.value.packageName, settingsStore)
+    // 传递用户在页面上选择的镜像源和架构，而不是默认配置
+    await downloadStore.startDownload(form.value.packageName, form.value.outputDir, form.value.mirror, form.value.arch, settingsStore)
     ElMessage.success('开始下载')
-  } catch (error) {
-    ElMessage.error(error.message || '下载失败')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '下载失败'
+    ElMessage.error(message)
   }
 }
 
@@ -145,6 +162,9 @@ const selectOutputDir = async () => {
     const path = await window.electronAPI.selectDirectory()
     if (path) {
       form.value.outputDir = path
+      // 自动保存到 settings（持久化）
+      await settingsStore.updateSettings({ defaultOutputDir: path })
+      ElMessage.success('输出目录已保存')
     }
   } else {
     ElMessage.info('请在设置中配置默认输出目录')
@@ -160,8 +180,5 @@ const selectOutputDir = async () => {
 }
 .download-card {
   margin-bottom: 20px;
-}
-.parsed-preview {
-  margin-bottom: 16px;
 }
 </style>
