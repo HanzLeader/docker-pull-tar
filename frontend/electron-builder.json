@@ -8,23 +8,16 @@
   "win": {
     "target": [
       {
-        "target": "nsis",
+        "target": "dir",
         "arch": ["x64"]
       }
     ],
-    "icon": "resources/icon.ico"
-  },
-  "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true,
-    "createDesktopShortcut": true,
-    "installerIcon": "resources/icon.ico",
-    "uninstallerIcon": "resources/icon.ico"
+    "sign": null
   },
   "extraResources": [
     {
-      "from": "../backend",
-      "to": "backend"
+      "from": "../backend-dist/backend.exe",
+      "to": "backend/backend.exe"
     }
   ]
 }
