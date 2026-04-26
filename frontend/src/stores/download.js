@@ -41,7 +41,7 @@ export const useDownloadStore = defineStore('download', {
       const credentials = settingsStore.getMirrorCredentials(parsed.registry)
 
       const res = await downloadApi.start({
-        packageName: parsed.packageName,
+        packageName: parsed.repository,  // 传递完整的 repository 而非 imageName
         tag: parsed.tag,
         arch: this.arch,
         mirror: parsed.registry,
