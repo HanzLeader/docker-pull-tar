@@ -195,19 +195,31 @@ class DockerPullService:
             if 'manifests' in manifest:
                 # 选择指定架构
                 digest = None
+                media_type = None
                 for m in manifest['manifests']:
                     platform = m.get('platform', {})
                     if platform.get('architecture') == arch and platform.get('os') == 'linux':
                         digest = m.get('digest')
+                        media_type = m.get('mediaType', 'application/vnd.docker.distribution.manifest.v2+json')
                         break
 
                 if not digest:
                     await self._send_log("error", f"找不到架构 {arch} 的镜像")
                     return False
 
-                # 获取具体架构的 manifest
+                await self._send_log("info", f"找到架构 {arch} 的 manifest: {digest[:20]}...")
+
+                # 获取具体架构的 manifest - 使用正确的 Accept header
+                arch_headers = auth_head.copy()
+                arch_headers['Accept'] = media_type
+
                 manifest_url = f'https://{registry}/v2/{image_info.repository}/manifests/{digest}'
-                resp = self.session.get(manifest_url, headers=auth_head, verify=False, timeout=60)
+                resp = self.session.get(manifest_url, headers=arch_headers, verify=False, timeout=60)
+
+                if resp.status_code != 200:
+                    await self._send_log("error", f"获取架构 manifest 失败: {resp.status_code}")
+                    return False
+
                 resp.raise_for_status()
                 manifest = resp.json()
 
