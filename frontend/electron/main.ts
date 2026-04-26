@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from 'electron'
 import path from 'path'
 import PythonProcessManager from './pythonProcess'
 
@@ -8,6 +8,9 @@ let pythonManager: PythonProcessManager | null = null
 const isDev: boolean = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 function createWindow(): void {
+  // 隐藏默认菜单栏
+  Menu.setApplicationMenu(null)
+
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
