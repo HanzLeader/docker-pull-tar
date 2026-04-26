@@ -2,7 +2,7 @@
   "name": "docker-pull-tar",
   "version": "2.0.0",
   "private": true,
-  "description": "Docker 镜像下载桌面应用",
+  "description": "Docker 镜像下载",
   "scripts": {
     "electron:dev": "pnpm --filter frontend electron:dev",
     "electron:build": "pnpm --filter frontend electron:build",
