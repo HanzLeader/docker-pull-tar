@@ -31,7 +31,8 @@ function createWindow(): void {
       // DevTools 打开后的处理
     })
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+    // 打包后 Vite 构建的 index.html 在 app.asar/dist/index.html
+    mainWindow.loadFile(path.join(__dirname, '../../dist/index.html'))
   }
 }
 
