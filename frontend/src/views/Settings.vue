@@ -2,66 +2,66 @@
   <div class="settings-page">
     <el-card class="settings-card">
       <template #header>
-        <span>基本设置</span>
-      </template>
-
-      <el-form :model="settings" label-width="120px">
-        <el-form-item label="默认输出目录">
-          <el-input v-model="settings.defaultOutputDir">
-            <template #append>
-              <el-button @click="selectOutputDir">选择</el-button>
-            </template>
-          </el-input>
-        </el-form-item>
-
-        <el-form-item label="默认架构">
-          <el-select v-model="settings.defaultArch">
-            <el-option label="amd64" value="amd64" />
-            <el-option label="arm64" value="arm64" />
-            <el-option label="armv7" value="armv7" />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="下载线程数">
-          <el-slider v-model="settings.downloadWorkers" :min="1" :max="16" show-stops />
-        </el-form-item>
-
-        <el-form-item>
-          <el-button type="primary" @click="saveSettings">保存设置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <el-card class="mirrors-card">
-      <template #header>
         <div class="card-header">
-          <span>镜像源管理</span>
-          <el-button type="primary" size="small" @click="showAddMirror">添加镜像源</el-button>
+          <span>设置</span>
+          <el-button type="primary" size="default" @click="showAddMirror">添加镜像源</el-button>
         </div>
       </template>
 
-      <el-table :data="mirrors" style="width: 100%">
-        <el-table-column prop="name" label="名称" width="120" />
-        <el-table-column prop="registry" label="地址" />
-        <el-table-column label="认证" width="100">
-          <template #default="{ row }">
-            <el-tag v-if="row.username" type="success" size="small">已配置</el-tag>
-            <el-tag v-else type="info" size="small">无</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="默认" width="80">
-          <template #default="{ row }">
-            <el-tag v-if="row.isDefault" type="success">默认</el-tag>
-            <el-button v-else size="small" @click="setDefaultMirror(row.id)">设为默认</el-button>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="140">
-          <template #default="{ row }">
-            <el-button size="small" @click="editMirror(row)">编辑</el-button>
-            <el-button v-if="!row.isDefault" type="danger" size="small" @click="deleteMirror(row.id)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="card-body">
+        <div class="section-title">基本设置</div>
+        <el-form :model="settings" label-width="120px">
+          <el-form-item label="默认输出目录">
+            <el-input v-model="settings.defaultOutputDir">
+              <template #append>
+                <el-button @click="selectOutputDir">选择</el-button>
+              </template>
+            </el-input>
+          </el-form-item>
+
+          <el-form-item label="默认架构">
+            <el-select v-model="settings.defaultArch">
+              <el-option label="amd64" value="amd64" />
+              <el-option label="arm64" value="arm64" />
+              <el-option label="armv7" value="armv7" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="下载线程数">
+            <el-slider v-model="settings.downloadWorkers" :min="1" :max="8" show-stops />
+          </el-form-item>
+
+          <el-form-item>
+            <el-button type="primary" @click="saveSettings">保存设置</el-button>
+          </el-form-item>
+        </el-form>
+
+        <el-divider />
+
+        <div class="section-title">镜像源管理</div>
+        <el-table :data="mirrors" style="width: 100%">
+          <el-table-column prop="name" label="名称" width="120" />
+          <el-table-column prop="registry" label="地址" />
+          <el-table-column label="认证" width="100">
+            <template #default="{ row }">
+              <el-tag v-if="row.username" type="success" size="small">已配置</el-tag>
+              <el-tag v-else type="info" size="small">无</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="默认" width="100">
+            <template #default="{ row }">
+              <el-tag v-if="row.isDefault" type="success">默认</el-tag>
+              <el-button v-else size="small" @click="setDefaultMirror(row.id)">设为默认</el-button>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="140">
+            <template #default="{ row }">
+              <el-button size="small" @click="editMirror(row)">编辑</el-button>
+              <el-button v-if="!row.isDefault" type="danger" size="small" @click="deleteMirror(row.id)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-card>
 
     <el-dialog v-model="addMirrorVisible" :title="editMode ? '编辑镜像源' : '添加镜像源'" width="400px">
@@ -237,15 +237,39 @@ const deleteMirror = async (id: string): Promise<void> => {
 <style scoped>
 .settings-page {
   padding: 20px;
-  max-width: 800px;
+  max-width: 960px;
   margin: 0 auto;
+  height: calc(100vh - 60px);
+  overflow: hidden;
 }
-.settings-card, .mirrors-card {
-  margin-bottom: 20px;
+.settings-card {
+  height: 92%;
+}
+.settings-card :deep(.el-card__body) {
+  height: calc(100% - 60px);
+  overflow-y: auto;
+  padding: 20px;
 }
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.card-body {
+  display: flex;
+  flex-direction: column;
+}
+.section-title {
+  font-weight: bold;
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 12px;
+}
+/* 让基本设置更紧凑 */
+.settings-card :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+.settings-card :deep(.el-slider) {
+  margin-top: 4px;
 }
 </style>

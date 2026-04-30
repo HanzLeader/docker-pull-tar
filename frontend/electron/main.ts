@@ -4,6 +4,7 @@ import PythonProcessManager from './pythonProcess'
 
 let mainWindow: BrowserWindow | null = null
 let pythonManager: PythonProcessManager | null = null
+let isQuitting = false
 
 const isDev: boolean = process.env.NODE_ENV === 'development' || !app.isPackaged
 
@@ -14,8 +15,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 700,
-    minWidth: 800,
-    minHeight: 600,
+    resizable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -24,6 +24,21 @@ function createWindow(): void {
       spellcheck: false
     },
     icon: path.join(__dirname, '../../resources/icon.ico')
+  })
+
+  // 监听窗口关闭事件
+  mainWindow.on('close', (e): void => {
+    if (!isQuitting) {
+      e.preventDefault()
+      isQuitting = true
+      // 先停止后端进程
+      if (pythonManager) {
+        pythonManager.stop()
+      }
+      // 然后关闭窗口
+      mainWindow?.destroy()
+      mainWindow = null
+    }
   })
 
   if (isDev) {
@@ -42,15 +57,35 @@ function createWindow(): void {
 async function startPythonProcess(): Promise<void> {
   pythonManager = new PythonProcessManager()
 
-  const backendPath: string = isDev
-    ? path.join(__dirname, '../../backend')
-    : path.join(process.resourcesPath, 'backend')
+  // 开发模式下 __dirname = frontend/dist-electron/electron
+  // 需要向上 3 级到达项目根目录
+  const projectRoot = isDev
+    ? path.resolve(__dirname, '../../..')
+    : process.resourcesPath
 
-  const pythonPath: string = isDev
-    ? 'python'
-    : path.join(process.resourcesPath, 'backend', 'backend.exe')
+  const backendPath: string = path.join(projectRoot, 'backend')
+  const configPath: string = path.join(projectRoot, 'startup.config.json')
 
-  await pythonManager.start(pythonPath, backendPath)
+  console.log('[Python] Project root:', projectRoot)
+  console.log('[Python] Config path:', configPath)
+
+  pythonManager.loadConfig(configPath)
+
+  // 打包模式下强制使用 exe 模式
+  if (!isDev) {
+    const config = pythonManager.getConfig()
+    // 打包模式下，确保使用 exe 启动
+    if (config.startupMode === 'none' || config.startupMode === 'python' || config.startupMode === 'conda') {
+      console.log('[Python] Packaged mode: overriding startupMode to exe')
+      pythonManager.setConfig({
+        ...config,
+        startupMode: 'exe',
+        pythonPath: path.join(process.resourcesPath, 'backend', 'backend.exe')
+      })
+    }
+  }
+
+  await pythonManager.start(backendPath)
 }
 
 app.whenReady().then(async (): Promise<void> => {
@@ -74,6 +109,14 @@ app.on('window-all-closed', (): void => {
 })
 
 app.on('before-quit', (): void => {
+  isQuitting = true
+  if (pythonManager) {
+    pythonManager.stop()
+  }
+})
+
+// 确保应用退出时清理
+app.on('will-quit', (): void => {
   if (pythonManager) {
     pythonManager.stop()
   }

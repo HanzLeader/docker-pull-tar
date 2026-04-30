@@ -5,7 +5,7 @@
         <el-form-item label="镜像包名">
           <el-input
             v-model="form.packageName"
-            placeholder="例如: nginx, nginx:latest, alpine:3.18"
+            placeholder="例如: nginx, nginx:latest"
             :disabled="isDownloading"
           >
             <template #append>
@@ -61,6 +61,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useSettingsStore } from '@/stores/settings'
 import { useDownloadStore } from '@/stores/download'
@@ -68,6 +69,8 @@ import { parseImageInput } from '@/utils/imageParser'
 import MirrorSelector from '@/components/MirrorSelector.vue'
 import LogConsole from '@/components/LogConsole.vue'
 
+const route = useRoute()
+const router = useRouter()
 const settingsStore = useSettingsStore()
 const downloadStore = useDownloadStore()
 
@@ -94,6 +97,32 @@ onMounted(async () => {
     form.value.arch = settingsStore.settings.defaultArch
     form.value.outputDir = settingsStore.settings.defaultOutputDir
     form.value.mirror = settingsStore.getDefaultMirrorRegistry()
+    form.value.packageName = settingsStore.settings.lastPackageName || ''
+
+    // 处理重新下载参数
+    if (route.query.redownload) {
+      const packageName = route.query.packageName as string
+      const tag = route.query.tag as string
+      const arch = route.query.arch as string
+      const mirror = route.query.mirror as string
+
+      if (packageName) {
+        // 拼接完整镜像包名
+        form.value.packageName = tag ? `${packageName}:${tag}` : packageName
+      }
+      if (arch) {
+        form.value.arch = arch
+      }
+      if (mirror) {
+        // 检查镜像源是否存在
+        const mirrorExists = settingsStore.mirrors.some(m => m.registry === mirror)
+        form.value.mirror = mirrorExists ? mirror : settingsStore.getDefaultMirrorRegistry()
+      }
+
+      // 清除 query 参数，避免刷新页面时重复填充
+      router.replace({ path: '/' })
+    }
+
     console.log('Settings loaded:', form.value)
     downloadStore.connectWebSocket()
     downloadStore.startPolling()
@@ -104,6 +133,7 @@ onMounted(async () => {
     form.value.arch = 'amd64'
     form.value.outputDir = ''
     form.value.mirror = 'docker.1ms.run'
+    form.value.packageName = ''
   }
 })
 
@@ -133,9 +163,12 @@ const startDownload = async () => {
     return
   }
 
-  // 保存选择的目录到 settings（持久化）
-  if (form.value.outputDir !== settingsStore.settings.defaultOutputDir) {
-    await settingsStore.updateSettings({ defaultOutputDir: form.value.outputDir })
+  // 保存选择的目录和包名到 settings（持久化）
+  if (form.value.outputDir !== settingsStore.settings.defaultOutputDir || form.value.packageName !== settingsStore.settings.lastPackageName) {
+    await settingsStore.updateSettings({
+      defaultOutputDir: form.value.outputDir,
+      lastPackageName: form.value.packageName
+    })
   }
 
   try {
@@ -162,8 +195,11 @@ const selectOutputDir = async () => {
     const path = await window.electronAPI.selectDirectory()
     if (path) {
       form.value.outputDir = path
-      // 自动保存到 settings（持久化）
-      await settingsStore.updateSettings({ defaultOutputDir: path })
+      // 自动保存到 settings（持久化），同时保存当前包名
+      await settingsStore.updateSettings({
+        defaultOutputDir: path,
+        lastPackageName: form.value.packageName
+      })
       ElMessage.success('输出目录已保存')
     }
   } else {
@@ -175,10 +211,10 @@ const selectOutputDir = async () => {
 <style scoped>
 .home-page {
   padding: 20px;
-  max-width: 800px;
+  max-width: 960px;
   margin: 0 auto;
 }
 .download-card {
-  margin-bottom: 20px;
+  height: 92%;
 }
 </style>

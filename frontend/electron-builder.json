@@ -8,15 +8,16 @@
   "win": {
     "target": [
       {
-        "target": "dir",
+        "target": "portable",
         "arch": ["x64"]
       }
     ],
-    "sign": null
+    "sign": null,
+    "icon": "../resources/icon-256.ico"
   },
   "extraResources": [
     {
-      "from": "../backend-dist/backend.exe",
+      "from": "../dist/backend.exe",
       "to": "backend/backend.exe"
     }
   ]

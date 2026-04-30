@@ -4,6 +4,7 @@ export interface AppSettings {
   defaultArch: string
   defaultMirror: string
   downloadWorkers: number
+  lastPackageName: string
 }
 
 export interface Mirror {

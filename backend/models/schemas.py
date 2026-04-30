@@ -15,7 +15,7 @@ class DownloadStatus(str, Enum):
 
 
 class MirrorSource(BaseModel):
-    id: str
+    id: Optional[str] = None
     name: str
     registry: str
     isDefault: bool = False
@@ -29,6 +29,7 @@ class Settings(BaseModel):
     defaultArch: str = "amd64"
     defaultMirror: str = "docker.1ms.run"
     downloadWorkers: int = Field(default=4, ge=1, le=16)
+    lastPackageName: str = ""  # 上次下载的镜像包名
 
 
 class DownloadRequest(BaseModel):

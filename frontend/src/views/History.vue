@@ -1,10 +1,10 @@
 <template>
   <div class="history-page">
-    <el-card>
+    <el-card class="history-card">
       <template #header>
         <div class="card-header">
           <span>下载历史</span>
-          <el-button type="danger" size="small" @click="clearHistory" :disabled="history.length === 0">
+          <el-button type="danger" size="default" @click="clearHistory" :disabled="history.length === 0">
             清空历史
           </el-button>
         </div>
@@ -15,9 +15,9 @@
       <div v-else class="history-list">
         <div v-for="item in history" :key="item.id" class="history-item">
           <div class="item-header">
-            <span class="item-status" :class="item.status">
-              {{ item.status === 'completed' ? '完成' : item.status === 'failed' ? '失败' : '等待' }}
-            </span>
+            <el-tag :type="getStatusType(item.status)">
+              {{ getStatusText(item.status) }}
+            </el-tag>
             <span class="item-name">{{ item.packageName }}:{{ item.tag }}</span>
             <span class="item-arch">({{ item.arch }})</span>
           </div>
@@ -60,10 +60,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { historyApi } from '@/api'
+import { useSettingsStore } from '@/stores/settings'
 import type { HistoryItem } from '@/types/api'
 
+const router = useRouter()
+const settingsStore = useSettingsStore()
 const history = ref<HistoryItem[]>([])
 
 onMounted(async () => {
@@ -104,13 +108,34 @@ const deleteHistory = async (id: string): Promise<void> => {
   }
 }
 
-const redownload = (_item: HistoryItem): void => {
-  ElMessage.info('重新下载功能待实现')
+const redownload = async (item: HistoryItem): Promise<void> => {
+  // 检查镜像源是否还存在
+  await settingsStore.loadSettings()
+  const mirrorExists = settingsStore.mirrors.some(m => m.registry === item.mirror)
+  const mirror = mirrorExists ? item.mirror : settingsStore.getDefaultMirrorRegistry()
+
+  if (!mirrorExists) {
+    ElMessage.warning(`镜像源 ${item.mirror} 已不存在，将使用默认镜像源`)
+  }
+
+  // 跳转到下载页面并传递参数
+  router.push({
+    path: '/',
+    query: {
+      redownload: 'true',
+      packageName: item.packageName,
+      tag: item.tag,
+      arch: item.arch,
+      mirror: mirror
+    }
+  })
 }
 
 const openDirectory = async (path: string): Promise<void> => {
   if (window.electronAPI?.openDirectory) {
-    await window.electronAPI.openDirectory(path)
+    // 打开 tar 文件的父目录
+    const parentDir = path.substring(0, path.lastIndexOf('\\') !== -1 ? path.lastIndexOf('\\') : path.lastIndexOf('/'))
+    await window.electronAPI.openDirectory(parentDir)
   } else {
     ElMessage.info('请在文件管理器中打开: ' + path)
   }
@@ -120,13 +145,47 @@ const formatTime = (timestamp: string | null): string => {
   if (!timestamp) return '未知'
   return new Date(timestamp).toLocaleString('zh-CN')
 }
+
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    completed: '完成',
+    failed: '失败',
+    cancelled: '已取消',
+    downloading: '下载中',
+    preparing: '准备中',
+    idle: '等待'
+  }
+  return statusMap[status] || '未知'
+}
+
+const getStatusType = (status: string): 'success' | 'danger' | 'warning' | 'info' | 'primary' => {
+  const typeMap: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'primary'> = {
+    completed: 'success',
+    failed: 'danger',
+    cancelled: 'warning',
+    downloading: 'primary',
+    preparing: 'primary',
+    idle: 'info'
+  }
+  return typeMap[status] || 'info'
+}
 </script>
 
 <style scoped>
 .history-page {
   padding: 20px;
-  max-width: 800px;
+  max-width: 960px;
   margin: 0 auto;
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+.history-card {
+  height: 92%;
+}
+.history-card :deep(.el-card__body) {
+  height: calc(100% - 60px);
+  overflow-y: auto;
+  padding: 20px;
 }
 .card-header {
   display: flex;
@@ -134,28 +193,25 @@ const formatTime = (timestamp: string | null): string => {
   align-items: center;
 }
 .history-list {
-  max-height: 500px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .history-item {
+  background-color: #fafafa;
   border: 1px solid #e4e7ed;
   border-radius: 8px;
   padding: 12px;
-  margin-bottom: 12px;
 }
 .item-header {
   font-weight: bold;
   margin-bottom: 8px;
-}
-.item-status.completed {
-  color: #67c23a;
-}
-.item-status.failed {
-  color: #f56c6c;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .item-arch {
   color: #909399;
-  margin-left: 8px;
 }
 .item-details {
   margin-bottom: 8px;

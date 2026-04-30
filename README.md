@@ -45,9 +45,7 @@ pip install -r backend/requirements.txt
 pip install pyinstaller
 
 # 4. 打包后端
-python -m PyInstaller backend.spec --clean --noconfirm
-mkdir backend-dist
-cp dist/backend.exe backend-dist/
+pyinstaller backend.spec --noconfirm
 
 # 5. 打包前端（完整打包）
 npm run build
@@ -66,11 +64,49 @@ pnpm install
 npm run dev
 ```
 
+#### Python 后端启动配置
+
+开发模式通过 `startup.config.json` 配置 Python 后端启动方式：
+
+```json
+{
+  "startupMode": "conda",
+  "condaEnv": "docker-pull-tar",
+  "port": 8000
+}
+```
+
+**启动模式：**
+
+| 模式 | 说明 |
+|------|------|
+| `none` | 不自动启动，需手动运行 `python backend/main.py` |
+| `python` | 使用系统 Python 启动 |
+| `conda` | 使用 conda 环境（指定 `condaEnv` 环境名） |
+| `exe` | 运行打包后的 backend.exe（打包模式自动使用） |
+
+**常见配置示例：**
+
+```
+{ "startupMode": "none" }
+
+// 系统 Python
+{ "startupMode": "python" }
+
+// Conda 环境
+{ "startupMode": "conda", "condaEnv": "your-env-name" }
+
+// 指定 Python 路径
+{ "startupMode": "python", "pythonPath": "C:/Python310/python.exe" }
+```
+
+打包后的应用自动使用 `exe` 模式，无需配置。
+
 ## 使用方法
 
 ### 基本操作
 
-1. 输入镜像名称（如 `nginx:latest`、`alpine:3.18`）
+1. 输入镜像名称（如 `nginx:latest`）
 2. 选择镜像源（默认 1ms.run）
 3. 选择架构（默认 amd64）
 4. 选择输出目录
@@ -102,19 +138,12 @@ docker-pull-tar/
 │   └── services/      # 业务逻辑
 │   └── requirements.txt # Python 依赖
 ├── backend.spec       # PyInstaller 打包配置
-├── backend-dist/      # 打包后的 backend.exe（需自行打包）
+├── dist/              # PyInstaller 输出（backend.exe）
 ├── frontend/          # Vue 3 + Electron 前端
 │   ├── src/           # Vue 源码
 │   └── electron/      # Electron 主进程
 │   └ electron-builder.json # Electron 打包配置
 ├── package.json       # 项目配置
+├── startup.config.json # Python 后端启动配置（开发模式）
 └── README.md
 ```
-
-## 许可证
-
-MIT License
-
-## 联系方式
-
-如有问题或建议，请提交 [GitHub Issues](https://github.com/topcss/docker-pull-tar/issues)。

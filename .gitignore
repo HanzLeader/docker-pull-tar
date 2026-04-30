@@ -2,10 +2,9 @@ test.py
 .*
 !.gitignore
 
-# 打包产物（开发者需自行打包）
+# 打包产物
 dist/
 build/
-backend-dist/
 frontend/dist/
 frontend/dist-electron/
 *.zip

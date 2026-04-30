@@ -41,12 +41,33 @@ class DownloadStats:
     total_size: int = 0
     downloaded_size: int = 0
     start_time: float = 0.0
-    speeds: List[float] = field(default_factory=list)
+    last_check_time: float = 0.0
+    last_check_size: int = 0
+    current_speed: float = 0.0
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
     def get_avg_speed(self) -> float:
-        if not self.speeds:
-            return 0.0
-        return sum(self.speeds[-10:]) / len(self.speeds[-10:])
+        with self.lock:
+            return self.current_speed
+
+    def add_downloaded(self, size: int):
+        with self.lock:
+            self.downloaded_size += size
+
+    def update_speed(self):
+        """更新总下载速度（基于总下载量的变化）"""
+        with self.lock:
+            current_time = time.time()
+            if self.last_check_time > 0:
+                elapsed = current_time - self.last_check_time
+                if elapsed >= 0.5:  # 至少0.5秒间隔才更新速度
+                    size_diff = self.downloaded_size - self.last_check_size
+                    self.current_speed = size_diff / elapsed
+                    self.last_check_time = current_time
+                    self.last_check_size = self.downloaded_size
+            else:
+                self.last_check_time = current_time
+                self.last_check_size = 0
 
 
 class DockerPullService:
@@ -55,6 +76,7 @@ class DockerPullService:
     def __init__(self):
         self.stop_event = threading.Event()
         self.progress_data = {}
+        self.progress_lock = threading.Lock()
         self.session = self._create_session()
         self.settings_store = SettingsStore()
 
@@ -114,6 +136,7 @@ class DockerPullService:
             resp = self.session.get(url, verify=False, timeout=30)
 
             if 'WWW-Authenticate' not in resp.headers:
+                print(f"[Auth] No WWW-Authenticate header for {registry}")
                 return {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'}
 
             auth_url = resp.headers['WWW-Authenticate'].split('"')[1]
@@ -127,9 +150,11 @@ class DockerPullService:
                 encoded_auth = base64.b64encode(auth_string.encode('utf-8')).decode('utf-8')
                 headers['Authorization'] = f'Basic {encoded_auth}'
 
+            print(f"[Auth] Requesting token from {auth_req_url}")
             auth_resp = self.session.get(auth_req_url, headers=headers, verify=False, timeout=30)
             auth_resp.raise_for_status()
             access_token = auth_resp.json()['token']
+            print(f"[Auth] Token obtained successfully")
 
             return {
                 'Authorization': f'Bearer {access_token}',
@@ -141,6 +166,7 @@ class DockerPullService:
                 ])
             }
         except Exception as e:
+            print(f"[Auth] Error getting auth head: {e}")
             return {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'}
 
     async def download_image(
@@ -171,7 +197,7 @@ class DockerPullService:
 
             # 准备输出目录
             safe_repo = image_info.repository.replace("/", "_").replace(":", "_")
-            dir_name = f"{safe_repo}_{tag}_{arch}"
+            dir_name = f"{safe_repo}_{tag}"
             output_path = Path(output_dir) / dir_name
             output_path.mkdir(parents=True, exist_ok=True)
 
@@ -247,6 +273,11 @@ class DockerPullService:
             await self._send_progress(self.progress_data)
             await self._send_log("info", f"📦 镜像总大小: {self._format_size(total_bytes)}")
 
+            # 获取下载线程数设置
+            settings = self.settings_store.get_settings()
+            workers = settings.downloadWorkers if hasattr(settings, 'downloadWorkers') else 4
+            await self._send_log("info", f"🔧 使用 {workers} 个线程并行下载")
+
             # 下载层
             imgdir = str(output_path / 'layers')
             os.makedirs(imgdir, exist_ok=True)
@@ -256,20 +287,11 @@ class DockerPullService:
             layer_json_map = {}
             content = [{'Config': '', 'RepoTags': [f'{image_info.repository}:{tag}'], 'Layers': []}]
 
+            # 预先创建所有层目录
+            layer_tasks = []
             for idx, layer in enumerate(layers):
-                if self.stop_event.is_set():
-                    await self._send_log("warning", "下载已取消")
-                    return False
-
                 layer_digest = layer['digest']
                 layer_size = layer.get('size', 0)
-
-                # 更新进度
-                self.progress_data["currentLayer"] = idx + 1
-                self.progress_data["layers"][idx]["status"] = "downloading"
-                await self._send_progress(self.progress_data)
-
-                await self._send_log("info", f"⬇️ 下载 Layer {idx+1}/{total_layers}: {layer_digest[:12]} ({self._format_size(layer_size)})")
 
                 # 创建层目录
                 fake_layerid = hashlib.sha256((parentid + '\n' + layer_digest + '\n').encode('utf-8')).hexdigest()
@@ -278,25 +300,81 @@ class DockerPullService:
                 layer_json_map[fake_layerid] = {"id": fake_layerid, "parent": parentid if parentid else None}
                 parentid = fake_layerid
 
-                # 下载层文件
+                # 构建下载任务
                 url = f'https://{registry}/v2/{image_info.repository}/blobs/{layer_digest}'
                 save_path = f'{layerdir}/layer_gzip.tar'
+                layer_tasks.append({
+                    'idx': idx,
+                    'url': url,
+                    'save_path': save_path,
+                    'digest': layer_digest,
+                    'size': layer_size
+                })
 
-                success = await self._download_layer(url, auth_head, save_path, layer_digest, layer_size, stats)
+            # 使用线程池并行下载
+            download_results = {}
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                # 提交所有下载任务
+                futures = {}
+                for task in layer_tasks:
+                    if self.stop_event.is_set():
+                        break
+                    future = executor.submit(
+                        self._download_layer_sync,
+                        task['url'],
+                        auth_head,
+                        task['save_path'],
+                        task['digest'],
+                        task['size'],
+                        stats,
+                        task['idx']
+                    )
+                    futures[future] = task['idx']
+                    with self.progress_lock:
+                        self.progress_data["layers"][task['idx']]["status"] = "downloading"
+                    await self._send_log("info", f"⬇️ 开始下载 Layer {task['idx']+1}/{total_layers}: {task['digest'][:12]} ({self._format_size(task['size'])})")
 
-                if not success:
-                    self.progress_data["layers"][idx]["status"] = "failed"
+                # 定期发送进度更新
+                while futures and not self.stop_event.is_set():
+                    # 检查已完成的任务
+                    done_futures = [f for f in futures.keys() if f.done()]
+                    for future in done_futures:
+                        idx = futures.pop(future)
+                        try:
+                            success = future.result()
+                            download_results[idx] = success
+                            with self.progress_lock:
+                                self.progress_data["layers"][idx]["status"] = "completed" if success else "failed"
+                            if success:
+                                await self._send_log("success", f"✅ Layer {idx+1} 完成")
+                            else:
+                                await self._send_log("error", f"❌ Layer {idx+1} 下载失败")
+                        except Exception as e:
+                            download_results[idx] = False
+                            with self.progress_lock:
+                                self.progress_data["layers"][idx]["status"] = "failed"
+                            await self._send_log("error", f"❌ Layer {idx+1} 下载失败: {str(e)}")
+
+                    # 更新进度
+                    stats.update_speed()
+                    with self.progress_lock:
+                        completed_count = sum(1 for r in download_results.values() if r)
+                        self.progress_data["currentLayer"] = completed_count
+                        self.progress_data["downloadedBytes"] = int(stats.downloaded_size)
+                        self.progress_data["speed"] = int(stats.get_avg_speed())
                     await self._send_progress(self.progress_data)
-                    await self._send_log("error", f"❌ Layer {idx+1} 下载失败")
-                    return False
 
-                self.progress_data["layers"][idx]["status"] = "completed"
-                self.progress_data["downloadedBytes"] = int(stats.downloaded_size)
-                if stats.speeds:
-                    self.progress_data["speed"] = int(stats.get_avg_speed())
-                await self._send_progress(self.progress_data)
+                    await asyncio.sleep(0.5)
 
-                await self._send_log("info", f"✅ Layer {idx+1} 完成")
+            # 检查是否所有层都下载成功
+            if self.stop_event.is_set():
+                await self._send_log("warning", "下载已取消")
+                return False
+
+            failed_layers = [idx for idx, success in download_results.items() if not success]
+            if failed_layers:
+                await self._send_log("error", f"❌ {len(failed_layers)} 个层下载失败")
+                return False
 
             # 下载 config
             if config_digest:
@@ -348,7 +426,7 @@ class DockerPullService:
             # 创建最终 tar 文件
             await self._send_log("info", "📦 正在打包镜像...")
 
-            docker_tar = str(output_path / f'{safe_repo}_{tag}_{arch}.tar')
+            docker_tar = str(output_path / f'{safe_repo}_{tag}.tar')
             import tarfile
             with tarfile.open(docker_tar, "w") as tar:
                 tar.add(imgdir, arcname='/')
@@ -378,75 +456,74 @@ class DockerPullService:
             return False
 
     async def _download_layer(self, url: str, headers: Dict, save_path: str, digest: str, expected_size: int, stats: DownloadStats) -> bool:
-        """下载单个层 - 使用线程池避免阻塞事件循环"""
+        """下载单个层 - 使用线程池避免阻塞事件循环（已废弃，保留兼容）"""
         layer_idx = self.progress_data.get("currentLayer", 1) - 1
+        return await asyncio.to_thread(
+            self._download_layer_sync,
+            url, headers, save_path, digest, expected_size, stats, layer_idx
+        )
 
-        def sync_download():
-            sha256_hash = hashlib.sha256()
-            downloaded = 0
+    def _download_layer_sync(self, url: str, headers: Dict, save_path: str, digest: str, expected_size: int, stats: DownloadStats, layer_idx: int) -> bool:
+        """同步下载单个层 - 用于线程池执行"""
+        sha256_hash = hashlib.sha256()
+        downloaded = 0
 
-            resp = self.session.get(url, headers=headers, verify=False, timeout=120, stream=True)
+        try:
+            print(f"[Download] Starting download from: {url}")
+            resp = self.session.get(url, headers=headers, verify=False, timeout=(30, 120), stream=True)
             resp.raise_for_status()
+            print(f"[Download] Connection established, status: {resp.status_code}")
 
             total_size = int(resp.headers.get('content-length', expected_size))
-            stats.total_size += total_size
-            if stats.start_time == 0:
-                stats.start_time = time.time()
+            print(f"[Download] Expected size: {total_size}")
 
-            last_time = time.time()
-            last_downloaded = 0
+            with stats.lock:
+                stats.total_size += total_size
+                if stats.start_time == 0:
+                    stats.start_time = time.time()
+
+            chunk_timeout = 60
+            last_chunk_time = time.time()
 
             with open(save_path, 'wb') as f:
                 for chunk in resp.iter_content(chunk_size=65536):
                     if self.stop_event.is_set():
-                        return False, 0, 0
+                        print(f"[Download] Cancelled by stop_event")
+                        return False
+
+                    current_time = time.time()
+                    if current_time - last_chunk_time > chunk_timeout:
+                        print(f"[Download] Chunk read timeout after {chunk_timeout}s")
+                        raise TimeoutError(f"读取数据超时 ({chunk_timeout}秒无数据)")
 
                     if chunk:
                         f.write(chunk)
                         sha256_hash.update(chunk)
                         downloaded += len(chunk)
-                        stats.downloaded_size += len(chunk)
+                        stats.add_downloaded(len(chunk))
+                        last_chunk_time = current_time
 
-                        # 计算速度
-                        current_time = time.time()
-                        if current_time - last_time >= 0.5:
-                            speed = (downloaded - last_downloaded) / (current_time - last_time)
-                            stats.speeds.append(speed)
-                            last_downloaded = downloaded
-                            last_time = current_time
+                        # 更新层进度
+                        with self.progress_lock:
+                            if layer_idx >= 0 and layer_idx < len(self.progress_data.get("layers", [])):
+                                self.progress_data["layers"][layer_idx]["downloaded"] = downloaded
+                                self.progress_data["layers"][layer_idx]["total"] = total_size
 
             actual_digest = f'sha256:{sha256_hash.hexdigest()}'
-            return True, downloaded, total_size
-
-        # 使用线程池执行下载，每隔一段时间检查进度
-        loop = asyncio.get_event_loop()
-        future = loop.run_in_executor(None, sync_download)
-
-        # 定期检查进度并发送更新
-        while not future.done():
-            await asyncio.sleep(1.0)  # 每秒检查一次
-            if not future.done():
-                self.progress_data["downloadedBytes"] = int(stats.downloaded_size)
-                self.progress_data["speed"] = int(stats.get_avg_speed())
-                if layer_idx >= 0 and layer_idx < len(self.progress_data.get("layers", [])):
-                    self.progress_data["layers"][layer_idx]["downloaded"] = stats.downloaded_size
-                    self.progress_data["layers"][layer_idx]["total"] = expected_size
-                await self._send_progress(self.progress_data)
-
-        # 获取结果
-        try:
-            success, downloaded, total_size = future.result()
-            if success:
-                self.progress_data["downloadedBytes"] = int(stats.downloaded_size)
-                self.progress_data["speed"] = int(stats.get_avg_speed())
-                if layer_idx >= 0 and layer_idx < len(self.progress_data.get("layers", [])):
-                    self.progress_data["layers"][layer_idx]["downloaded"] = downloaded
-                    self.progress_data["layers"][layer_idx]["total"] = total_size
-                await self._send_progress(self.progress_data)
-            return success
+            print(f"[Download] Completed. Digest: {actual_digest[:20]}, Size: {downloaded}")
+            return True
+        except TimeoutError as e:
+            print(f"[Download] Timeout error: {e}")
+            raise
+        except requests.exceptions.Timeout as e:
+            print(f"[Download] Request timeout: {e}")
+            raise
+        except requests.exceptions.ConnectionError as e:
+            print(f"[Download] Connection error: {e}")
+            raise
         except Exception as e:
-            await self._send_log("error", f"下载层失败: {str(e)}")
-            return False
+            print(f"[Download] Unexpected error: {e}")
+            raise
 
     def _format_size(self, size: int) -> str:
         """格式化大小"""

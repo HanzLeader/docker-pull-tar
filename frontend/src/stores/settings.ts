@@ -14,7 +14,8 @@ export const useSettingsStore = defineStore('settings', {
       defaultOutputDir: '',
       defaultArch: 'amd64',
       defaultMirror: 'docker.1ms.run',
-      downloadWorkers: 4
+      downloadWorkers: 4,
+      lastPackageName: ''
     },
     mirrors: [],
     loading: false
@@ -39,7 +40,8 @@ export const useSettingsStore = defineStore('settings', {
           defaultOutputDir: '',
           defaultArch: 'amd64',
           defaultMirror: 'docker.1ms.run',
-          downloadWorkers: 4
+          downloadWorkers: 4,
+          lastPackageName: ''
         }
         this.mirrors = []
       } finally {

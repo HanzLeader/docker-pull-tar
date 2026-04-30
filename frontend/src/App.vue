@@ -5,7 +5,7 @@
         <span class="logo-icon">🚀</span>
         <span class="logo-text">Docker 镜像下载工具</span>
       </div>
-      <el-menu mode="horizontal" :default-active="activeMenu" router>
+      <el-menu mode="horizontal" :default-active="activeMenu" :ellipsis="false" router>
         <el-menu-item index="/">下载</el-menu-item>
         <el-menu-item index="/history">历史</el-menu-item>
         <el-menu-item index="/settings">设置</el-menu-item>
@@ -31,8 +31,12 @@ html, body {
   padding: 0;
   overflow: hidden;
 }
+body {
+  overflow-y: hidden;
+}
 .el-main {
   padding: 0 !important;
+  overflow-y: hidden;
 }
 .app-container {
   height: 100vh;

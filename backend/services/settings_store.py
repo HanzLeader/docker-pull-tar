@@ -24,10 +24,7 @@ class SettingsStore:
     def _get_default_mirrors(self) -> list[dict]:
         """返回默认镜像源列表。"""
         return [
-            {"id": "dockerhub", "name": "Docker Hub", "registry": "registry-1.docker.io", "isDefault": False},
-            {"id": "1ms", "name": "1ms.run", "registry": "docker.1ms.run", "isDefault": True},
-            {"id": "daocloud", "name": "DaoCloud", "registry": "docker.m.daocloud.io", "isDefault": False},
-            {"id": "xuanyuan", "name": "轩辕", "registry": "docker.xuanyuan.me", "isDefault": False},
+            {"id": "dockerhub", "name": "Docker Hub", "registry": "registry-1.docker.io", "isDefault": True},
         ]
 
     def _load_config(self):
@@ -54,8 +51,13 @@ class SettingsStore:
         return self.config.settings
 
     def update_settings(self, settings: Settings) -> Settings:
-        """更新用户设置并保存。"""
-        self.config.settings = settings
+        """更新用户设置并保存，支持部分更新。"""
+        # 获取现有设置，合并部分更新
+        existing = self.config.settings.model_dump()
+        incoming = settings.model_dump()
+        # 合并更新，保留未提供的字段
+        merged = {**existing, **incoming}
+        self.config.settings = Settings(**merged)
         self._save_config()
         return self.config.settings
 

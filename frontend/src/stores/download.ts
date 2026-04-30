@@ -17,6 +17,7 @@ interface DownloadState {
   wsConnection: WebSocket | null
   wsConnected: boolean
   wsReconnectAttempts: number
+  wsEverConnected: boolean  // 是否曾经成功连接过
 }
 
 const MAX_RECONNECT_ATTEMPTS = 5
@@ -58,7 +59,8 @@ export const useDownloadStore = defineStore('download', {
     logs: [],
     wsConnection: null,
     wsConnected: false,
-    wsReconnectAttempts: 0
+    wsReconnectAttempts: 0,
+    wsEverConnected: false
   }),
 
   actions: {
@@ -169,13 +171,16 @@ export const useDownloadStore = defineStore('download', {
           this.wsConnected = true
           this.wsReconnectAttempts = 0
           console.log('WebSocket connected')
-          // 添加连接成功日志
-          this.addLog({
-            type: 'log',
-            level: 'info',
-            message: '实时日志连接已建立',
-            timestamp: new Date().toISOString()
-          })
+          // 只在首次连接成功时显示日志
+          if (!this.wsEverConnected) {
+            this.wsEverConnected = true
+            this.addLog({
+              type: 'log',
+              level: 'info',
+              message: '实时日志连接已建立',
+              timestamp: new Date().toISOString()
+            })
+          }
         }
 
         ws.onmessage = (event: MessageEvent): void => {
@@ -189,18 +194,21 @@ export const useDownloadStore = defineStore('download', {
               const progressData = data as DownloadProgress
               this.progress = progressData
 
-              // 在控制台显示下载进度
-              if (progressData.currentLayer > 0 && progressData.totalLayers > 0) {
+              // 在控制台显示下载进度，包含每层详细下载量
+              if (progressData.layers && progressData.layers.length > 0) {
                 const speedStr = formatSpeed(progressData.speed)
-                const percent = progressData.totalBytes > 0
-                  ? Math.round((progressData.downloadedBytes / progressData.totalBytes) * 100)
-                  : 0
+                const layerDetails = progressData.layers.map((layer, idx) => {
+                  const downloadedStr = formatSize(layer.downloaded)
+                  const totalStr = formatSize(layer.total)
+                  const layerPercent = layer.total > 0 ? Math.round((layer.downloaded / layer.total) * 100) : 0
+                  const statusIcon = layer.status === 'completed' ? '✅' : layer.status === 'downloading' ? '⬇️' : '⏳'
+                  return `${statusIcon} L${idx + 1}: ${downloadedStr}/${totalStr} (${layerPercent}%)`
+                }).join(' | ')
 
-                // 添加进度日志
                 this.addLog({
                   type: 'log',
                   level: 'info',
-                  message: `📊 进度: ${progressData.currentLayer}/${progressData.totalLayers} 层 | ${percent}% | 速度: ${speedStr}`,
+                  message: `📊 ${layerDetails} | 速度: ${speedStr}`,
                   timestamp: new Date().toISOString()
                 })
               }
